@@ -10,11 +10,55 @@
 
 <h1 align="center">Omnichain Fungible Token (OFT) Solana Example</h1>
 
+## Requirements
+
+- Rust
+- Anchor v0.29
+- Solana CLI v.1.17.31
+- Docker
+- Node.js
+
 ## Setup
 
 We recommend using `pnpm` as a package manager (but you can of course use a package manager of your choice).
-Additionally, we highly recommend that you use the most up-to-date Docker version to avoid any issues with anchor
+
+[Docker](https://docs.docker.com/get-started/get-docker/) is required to build using anchor. We highly recommend that you use the most up-to-date Docker version to avoid any issues with anchor
 builds.
+
+:warning: You need anchor version `0.29` and solana version `1.17.31` specifically to compile the build artifacts. Using higher Anchor and Solana versions can introduce unexpected issues during compilation. See the following issues in Anchor's repo: [1](https://github.com/coral-xyz/anchor/issues/3089), [2](https://github.com/coral-xyz/anchor/issues/2835). After compiling the correct build artifacts, you can change the Solana version to higher versions.
+
+### Install Rust
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+```
+
+### Install Solana
+
+```bash
+sh -c "$(curl -sSfL https://release.solana.com/v1.17.31/install)"
+```
+
+### Install Anchor
+
+The preferred way of installing Anchor is by using AVM (Anchor Version Manager), which will allow easy version switching. So first, install AVM.
+
+```bash
+cargo install --git https://github.com/coral-xyz/anchor avm --force
+```
+
+Verify AVM is accessible
+
+```bash
+avm --version
+```
+
+Install and use the correct version
+
+```bash
+avm install 0.29.0
+avm use 0.29.0
+```
 
 ### Get the code
 
@@ -34,6 +78,41 @@ pnpm install
 pnpm test
 ```
 
+### Get Devnet SOL
+
+```bash
+solana airdrop 5 -u devnet
+```
+
+We recommend that you request 5 devnet SOL, which should be sufficient for this walkthrough. For the example here, we will be using Solana Devnet. If you hit rate limits, you can also use the [official Solana faucet](https://faucet.solana.com/).
+
+### Prepare `.env`
+
+```bash
+cp .env.example .env
+```
+
+In the `.env` just created, set `SOLANA_PRIVATE_KEY` to your private key value in base58 format. Since the locally stored keypair is in an integer array format, we'd need to encode it into base58 first. You can create a temporary script called `getBase58Pk.js` in your project root with the following contents:
+
+```js
+import fs from "fs";
+import { Keypair } from "@solana/web3.js";
+import bs58 from "bs58";
+
+const keypairFilePath = `<KEYPAIR_FILE_PATH_HERE>`; // you can view this by running `solana config get`
+
+const data = fs.readFileSync(keypairFilePath, "utf8");
+const keypairJson = JSON.parse(data);
+const keypair = Keypair.fromSecretKey(Uint8Array.from(keypairJson));
+const base58EncodedPrivateKey = bs58.encode(keypair.secretKey);
+
+console.log(base58EncodedPrivateKey);
+```
+
+Then, run `node getBase58Pk.js`
+
+Also set the `RPC_URL_SOLANA_TESTNET` value. Note that while the naming used here is `TESTNET`, it refers to the [Solana Devnet](https://docs.layerzero.network/v2/developers/evm/technical-reference/deployed-contracts#solana-testnet). We use `TESTNET` to keep it consistent with the existing EVM testnets.
+
 ## Deploy
 
 ### Prepare the OFT Program ID
@@ -49,16 +128,68 @@ anchor keys sync
 
 :warning: `--force` flag overwrites the existing keys with the ones you generate.
 
-:warning: Ensure that [lib.rs](./programs/oft/src/lib.rs) has the updated programId.
+Run `anchor keys list` to view the generated programIds (public keys). The output should look something like this:
 
-### Building and Deploying the OFT Program
+```
+endpoint: <ENDPOINT_PROGRAM_ID>
+oft: <OFT_PROGRAM_ID>
+```
+
+Copy the OFT's programId and go into [lib.rs](./programs/oft/src/lib.rs). Note the following snippet:
+
+```
+declare_id!(Pubkey::new_from_array(program_id_from_env!(
+    "OFT_ID",
+    "9UovNrJD8pQyBLheeHNayuG1wJSEAoxkmM14vw5gcsTT"
+)));
+```
+
+Replace `9UovNrJD8pQyBLheeHNayuG1wJSEAoxkmM14vw5gcsTT` with the programId that you have copied.
+
+### Building and Deploying the Solana OFT Program
+
+Ensure you have Docker running before running the build command.
 
 ```bash
 anchor build -v # verification flag enabled
-solana program deploy --program-id target/deploy/oft-keypair.json target/verifiable/oft.so -u mainnet-beta
+solana program deploy --program-id target/deploy/oft-keypair.json target/verifiable/oft.so -u devnet
 ```
 
-### Create the OFT
+:information_source: the `-u` flag specifies the RPC URL that should be used. The options are `mainnet-beta, devnet, testnet, localhost`, which also have their respective shorthands: `-um, -ud, -ut, -ul`
+
+:warning: If the deployment is slow, it could be that the network is congested. If so, you can either wait it out or opt to include a `priorityFee`.
+
+### (optional) Deploying with a priority fee
+
+This section only applies if you are unable to land your deployment transaction due to network congestion.
+
+:information_source: [Priority Fees](https://solana.com/developers/guides/advanced/how-to-use-priority-fees) are Solana's mechanism to allow transactions to be prioritized during periods of network congestion. When the network is busy, transactions without priority fees might never be processed. It is then necessary to include priority fees, or wait until the network is less congested. Priority fees are calculated as follows: `priorityFee = compute budget * compute unit price`. We can make use of priority fees by attaching the `--with-compute-unit-price` flag to our `solana program deploy` command.
+
+<details>
+  <summary>View instructions</summary>
+  Because building requires Solana CLI version `1.17.31`, but priority fees are only supported in version `1.18`, we will need to switch Solana CLI versions temporarily.
+
+```bash
+solana-install init 1.18.26
+```
+
+Note that you will only have `solana-install` if you installed v1.X.X or using the commands listed here, but you will not have if you had previously installed v2.
+
+Now let's rerun the deploy command, but with the compute unit price flag.
+
+```bash
+solana program deploy --program-id target/deploy/oft-keypair.json target/verifiable/oft.so -u devnet --with-compute-unit-price <COMPUTE_UNIT_PRICE_IN_LAMPORTS>
+```
+
+:warning: Make sure to switch back to v1.17.31 after deploying. If you need to rebuild artifacts, you must use Solana CLI version `1.17.31` and Anchor version `0.29.0`
+
+```bash
+solana-install init 1.17.31
+```
+
+</details>
+
+### Create the Solana OFT
 
 For OFT:
 
@@ -66,8 +197,8 @@ For OFT:
 pnpm hardhat lz:oft:solana:create --eid 40168 --program-id <PROGRAM_ID>
 ```
 
-:important: You may specify the `--additional-minters` flag to add a CSV of additional minter keys to the mint
-multisig. If you do not want to, you must sepcify `--only-oft-store`. If you choose the latter approach, you can never
+:warning: You may specify the `--additional-minters` flag to add a CSV of additional minter keys to the mint
+multisig. If you do not want to, you must specify `--only-oft-store true`. If you choose the latter approach, you can never
 substitute in a different mint authority.
 
 For OFTAdapter:
@@ -82,8 +213,8 @@ For OFT Mint-And-Burn Adapter (MABA):
 pnpm hardhat lz:oft:solana:create --eid 40168 --program-id <PROGRAM_ID> --mint <TOKEN_MINT> --token-program <TOKEN_PROGRAM_ID>
 ```
 
-:important: You may specify the `--additional-minters` flag to add a CSV of additional minter keys to the mint
-multisig. If you do not want to, you must sepcify `--only-oft-store`. If you choose the latter approach, you can never
+:warning: You may specify the `--additional-minters` flag to add a CSV of additional minter keys to the mint
+multisig. If you do not want to, you must specify `--only-oft-store store`. If you choose the latter approach, you can never
 substitute in a different mint authority.
 
 Make sure to update [layerzero.config.ts](./layerzero.config.ts) and set `solanaContract.address` with the `oftStore` address.

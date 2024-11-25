@@ -417,7 +417,7 @@ importers:
         specifier: ^7.23.9
         version: 7.23.9
       '@layerzerolabs/devtools-evm-hardhat':
-        specifier: ^2.0.0
+        specifier: ^2.0.1
         version: link:../../packages/devtools-evm-hardhat
       '@layerzerolabs/eslint-config-next':
         specifier: ~2.3.39
@@ -780,7 +780,7 @@ importers:
         specifier: ~1.0.0
         version: link:../../packages/devtools-evm
       '@layerzerolabs/devtools-evm-hardhat':
-        specifier: ^2.0.0
+        specifier: ^2.0.1
         version: link:../../packages/devtools-evm-hardhat
       '@layerzerolabs/devtools-solana':
         specifier: ~1.0.1
@@ -996,7 +996,7 @@ importers:
         specifier: ^7.23.9
         version: 7.23.9
       '@layerzerolabs/devtools-evm-hardhat':
-        specifier: ^2.0.0
+        specifier: ^2.0.1
         version: link:../../packages/devtools-evm-hardhat
       '@layerzerolabs/eslint-config-next':
         specifier: ~2.3.39
@@ -2161,7 +2161,7 @@ importers:
         version: 29.7.0(@types/node@18.18.14)(ts-node@10.9.2)
       tsup:
         specifier: ~8.0.1
-        version: 8.0.1(@swc/core@1.4.0)(typescript@5.5.3)
+        version: 8.0.1(@swc/core@1.4.0)(ts-node@10.9.2)(typescript@5.5.3)
       zod:
         specifier: ^3.22.4
         version: 3.22.4
@@ -18329,7 +18329,7 @@ packages:
       - ts-node
     dev: true
 
-  /tsup@8.0.1(@swc/core@1.4.0)(typescript@5.5.3):
+  /tsup@8.0.1(ts-node@10.9.2)(typescript@5.5.3):
     resolution: {integrity: sha512-hvW7gUSG96j53ZTSlT4j/KL0q1Q2l6TqGBFc6/mu/L46IoNWqLLUzLRLP1R8Q7xrJTmkDxxDoojV5uCVs1sVOg==}
     engines: {node: '>=18'}
     hasBin: true
