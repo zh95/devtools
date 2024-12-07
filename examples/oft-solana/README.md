@@ -14,7 +14,7 @@
 
 - Rust `v1.75.0`
 - Anchor `v0.29`
-- Solana CLI `v.1.17.31`
+- Solana CLI `v1.17.31`
 - Docker
 - Node.js
 
@@ -142,8 +142,35 @@ Replace `9UovNrJD8pQyBLheeHNayuG1wJSEAoxkmM14vw5gcsTT` with the programId that y
 
 Ensure you have Docker running before running the build command.
 
+#### Build the Solana OFT program
+
 ```bash
 anchor build -v # verification flag enabled
+```
+
+#### Preview Rent Costs for the Solana OFT
+
+:information_source: The majority of the SOL required to deploy your program will be for [**rent**](https://solana.com/docs/core/fees#rent) (specifically, for the minimum balance of SOL required for [rent-exemption](https://solana.com/docs/core/fees#rent-exempt)), which is calculated based on the amount of bytes the program or account uses. Programs typically require more rent than PDAs as more bytes are required to store the program's executable code.
+
+In our case, the OFT Program's rent accounts for roughly 99% of the SOL needed during deployment, while the other accounts' rent, OFT Store, Mint, Mint Authority Multisig and Escrow make up for only a fraction of the SOL needed.
+
+You can preview how much SOL would be needed for the program account. Note that the total SOL required would to be slightly higher than just this, to account for the other accounts that need to be created.
+
+```bash
+solana rent $(wc -c < target/verifiable/oft.so)
+```
+
+You should see an output such as
+
+```bash
+Rent-exempt minimum: 3.87415872 SOL
+```
+
+:information_source: LayerZero's default deployment path for Solana OFTs require you to deploy your own OFT program as this means you own the Upgrade Authority and don't rely on LayerZero to manage that authority for you. Read [this](https://neodyme.io/en/blog/solana_upgrade_authority/) to understand more no why this is important.
+
+#### Deploy the Solana OFT
+
+```bash
 solana program deploy --program-id target/deploy/oft-keypair.json target/verifiable/oft.so -u devnet
 ```
 
@@ -151,7 +178,7 @@ solana program deploy --program-id target/deploy/oft-keypair.json target/verifia
 
 :warning: If the deployment is slow, it could be that the network is congested. If so, you can either wait it out or opt to include a `priorityFee`.
 
-### (optional) Deploying with a priority fee
+#### (optional) Deploying with a priority fee
 
 This section only applies if you are unable to land your deployment transaction due to network congestion.
 
@@ -165,7 +192,7 @@ This section only applies if you are unable to land your deployment transaction 
 sh -c "$(curl -sSfL https://release.solana.com/v1.18.26/install)"
 ```
 
-You can run `npx hardhat solana:get-priority-fees --eid <SOLANA_EID> --address <PROGRAM_ID>` and use the `averageFeeExcludingZeros` value.
+You can run `npx hardhat lz:solana:get-priority-fees --eid <SOLANA_EID> --address <PROGRAM_ID>` and use the `averageFeeExcludingZeros` value.
 
 :information_source: The average is calculated from getting the prioritization fees across recent blocks, but some blocks may have `0` as the prioritization fee. `averageFeeExcludingZeros` ignores blocks with `0` prioritization fees.
 
@@ -185,31 +212,35 @@ sh -c "$(curl -sSfL https://release.solana.com/v1.17.31/install)"
 
 ### Create the Solana OFT
 
-For OFT:
+:information_source: For **OFT** and **OFT Mint-and-Burn Adapter**, the SPL token's Mint Authority is set to the **Mint Authority Multisig**, which always has the **OFT Store** as a signer. The multisig is fixed to needing 1 of N signatures.
+
+:information_source: For **OFT** and **OFT Mint-And-Burn Adapter**, you have the option to specify additional signers through the `--additional-minters` flag. If you choose not to, you must pass in `--only-oft-store true`, which means only the **OFT Store** will be a signer for the \_Mint Authority Multisig\*.
+
+:warning: If you choose to go with `--only-oft-store`, you will not be able to add in other signers/minters or update the Mint Authority. You will also not be able to renounce the Freeze Authority. The Mint Authority and Freeze Authority will be fixed to the Mint Authority Multisig address.
+
+#### For OFT:
 
 ```bash
 pnpm hardhat lz:oft:solana:create --eid 40168 --program-id <PROGRAM_ID>
 ```
 
-:warning: You may specify the `--additional-minters` flag to add a CSV of additional minter keys to the mint
-multisig. If you do not want to, you must specify `--only-oft-store true`. If you choose the latter approach, you can never
-substitute in a different mint authority.
+:warning: Use `--additional-minters` flag to add a CSV of additional minter addresses to the Mint Authority Multisig. If you do not want to, you must specify `--only-oft-store true`.
 
-For OFTAdapter:
+:information_source: You can also specify `--amount <AMOUNT>` to have the OFT minted to your deployer address upon token creation.
+
+#### For OFTAdapter:
 
 ```bash
 pnpm hardhat lz:oft-adapter:solana:create --eid 40168 --program-id <PROGRAM_ID> --mint <TOKEN_MINT> --token-program <TOKEN_PROGRAM_ID>
 ```
 
-For OFT Mint-And-Burn Adapter (MABA):
+#### For OFT Mint-And-Burn Adapter (MABA):
 
 ```bash
 pnpm hardhat lz:oft:solana:create --eid 40168 --program-id <PROGRAM_ID> --mint <TOKEN_MINT> --token-program <TOKEN_PROGRAM_ID>
 ```
 
-:warning: You may specify the `--additional-minters` flag to add a CSV of additional minter keys to the mint
-multisig. If you do not want to, you must specify `--only-oft-store store`. If you choose the latter approach, you can never
-substitute in a different mint authority.
+:warning: Use `--additional-minters` flag to add a CSV of additional minter addresses to the Mint Authority Multisig. If you do not want to, you must specify `--only-oft-store true`.
 
 ### Update [layerzero.config.ts](./layerzero.config.ts)
 
@@ -250,7 +281,9 @@ With a squads multisig, you can simply append the `--multisigKey` flag to the en
 
 ### Mint OFT on Solana
 
-:information_source: This is only possible if you specified your deployer address as part of the `--additional-minters` flag when creating the Solana OFT. If you had chosen `--only-oft-store`, you will not be able to mint your OFT on Solana.
+This is only relevant for **OFT**. If you opted to include the `--amount` flag in the create step, that means you already have minted some Solana OFT and you can skip this section.
+
+:information_source: This is only possible if you specified your deployer address as part of the `--additional-minters` flag when creating the Solana OFT. If you had chosen `--only-oft-store true`, you will not be able to mint your OFT on Solana.
 
 First, you need to create the Associated Token Account for your address.
 
